@@ -1,0 +1,14 @@
+services:
+  localstack:
+    image: localstack/localstack:3.7
+    container_name: localstack-etapa3
+    ports:
+      - "4566:4566"
+    environment:
+      - DEBUG=1
+      - SERVICES=lambda,apigateway,dynamodb,sns,cloudformation,iam,logs
+      - AWS_DEFAULT_REGION=us-east-1
+      - LAMBDA_EXECUTOR=docker
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./.localstack:/var/lib/localstack"

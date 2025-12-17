@@ -1,0 +1,131 @@
+service: etapa3-opcao-a-crud-sns
+
+frameworkVersion: "3"
+
+plugins:
+  - serverless-localstack
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    STAGE: ${self:provider.stage}
+    ITEMS_TABLE_NAME: ${self:custom.itemsTableName}
+    ITEM_EVENTS_TOPIC_ARN:
+      Ref: ItemsEventsTopic
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:PutItem
+        - dynamodb:GetItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+        - dynamodb:Scan
+      Resource:
+        - Fn::GetAtt:
+            - ItemsTable
+            - Arn
+    - Effect: Allow
+      Action:
+        - sns:Publish
+      Resource:
+        - Ref: ItemsEventsTopic
+
+custom:
+  itemsTableName: items
+  localstack:
+    stages:
+      - local
+      - dev
+    host: http://localhost
+    edgePort: 4566
+    autostart: false
+
+functions:
+  create:
+    handler: src/handlers/create.handler
+    events:
+      - http:
+          path: items
+          method: post
+          cors: true
+  openapi:
+    handler: src/handlers/openapi.handler
+    events:
+      - http:
+          path: openapi.json
+          method: get
+          cors: true
+  docs:
+    handler: src/handlers/docs.handler
+    events:
+      - http:
+          path: docs
+          method: get
+          cors: true
+  list:
+    handler: src/handlers/list.handler
+    events:
+      - http:
+          path: items
+          method: get
+          cors: true
+  get:
+    handler: src/handlers/get.handler
+    events:
+      - http:
+          path: items/{id}
+          method: get
+          cors: true
+  update:
+    handler: src/handlers/update.handler
+    events:
+      - http:
+          path: items/{id}
+          method: put
+          cors: true
+  delete:
+    handler: src/handlers/delete.handler
+    events:
+      - http:
+          path: items/{id}
+          method: delete
+          cors: true
+  emailSubscriber:
+    handler: src/handlers/emailSubscriber.handler
+    events:
+      - sns:
+          arn:
+            Ref: ItemsEventsTopic
+          topicName: ${self:resources.Resources.ItemsEventsTopic.Properties.TopicName}
+
+resources:
+  Resources:
+    ItemsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.itemsTableName}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+
+    ItemsEventsTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: items-events
+
+    EmailSubscriberInvokePermission:
+      Type: AWS::Lambda::Permission
+      Properties:
+        Action: lambda:InvokeFunction
+        FunctionName:
+          Ref: EmailSubscriberLambdaFunction
+        Principal: sns.amazonaws.com
+        SourceArn:
+          Ref: ItemsEventsTopic
